@@ -8,6 +8,23 @@ Alongside the standard sections, a "Breaking" section marks changes
 that require operator action; these are surfaced at the top of stable
 release notes.
 
+## [2.102.5] - 2026-11-15
+
+### Fixed
+
+- Approving a cleanup trim or split now updates the audio fingerprint of a pattern whose fingerprint has no recorded source. These fingerprints were stored before the source episode was recorded, and the audio step reported the original as not retained even when it was on disk. The audio is now rebuilt from the episode the pattern was learned from.
+- A cleanup split gives each new pattern its own audio. When the parent's audio came from a match in another episode, the pieces were looked up by exact text in that episode's transcript and none were found.
+- `GET /patterns/{id}/audio` and the audio preview use that same source for such a pattern. They reported no retained original.
+- A blank system prompt no longer sends an empty system message (OpenAI-compatible and Ollama) or an empty `system` parameter (Anthropic). Some gateways reject an empty system block with a 400. Contributed by no84by. (#1003)
+- The pre-roll detector finds the show's opening line in feeds whose title has a subtitle, such as "Show Name: The Weekly Talk". It tries the main title first, then the full title. Contributed by no84by. (#1004)
+- The reviewer's inward trim of a DAI pre-roll is accepted when it lands on the edge the transcript differential confirmed. The cut could keep the first words of the show. Contributed by no84by. (#1004)
+
+### Changed
+
+- A cleanup trim shortens the pattern's stored duration: to the length of the rebuilt audio, or in proportion to the shorter text when no audio was rebuilt. Matching uses the stored duration to place a missing edge, so a trimmed pattern could still cut its old, longer span. Undo restores the earlier duration unless later matches have changed it.
+- Each cleanup approval and undo logs what happened to the audio. `GET /patterns/cleanup/suggestions` returns it in `applied.audioOutcomes` and `applied.undoAudioOutcomes`, with `applied.previousAvgDuration` and `applied.fittedAvgDuration` for trims.
+- The manual pattern split picks its audio source the same way as a cleanup split.
+
 ## [2.102.4] - 2026-11-14
 
 ### Changed
