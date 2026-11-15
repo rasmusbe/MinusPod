@@ -33,7 +33,7 @@ import EpisodeRating from '../components/EpisodeRating';
 import SponsorBlockSubmit from '../components/SponsorBlockSubmit';
 import { DETECTION_STAGE_META } from '../utils/detectionStage';
 import { CORROBORATION_CLASS, CORROBORATION_META } from '../utils/corroboration';
-import { formatConfidence } from '../utils/confidence';
+import { formatConfidence, formatConfidenceTitle } from '../utils/confidence';
 import { isActionBlocked } from '../utils/processingStage';
 import { confirmLabel, isKeepLike, rejectLabel } from '../utils/segmentCategory';
 import { applyEpisodeJobState, jobStateFromError } from '../utils/jobStateCache';
@@ -136,6 +136,17 @@ function correctionBadgeLabel(correction: EpisodeCorrection): string {
     return correction.origin === 'auto_pass2' ? 'Auto-approved' : 'Confirmed';
   }
   return correction.correction_type === 'false_positive' ? 'Not ad' : 'Adjusted';
+}
+
+const CONFIRMED_TEXT = 'Confirmed';
+const NOT_AD_TEXT = 'Marked not an ad: the audio comes back at the next recut';
+
+// Plain-language outcome for a correction on a cut row; null when nothing was decided.
+function correctionResultText(correction?: EpisodeCorrection): string | null {
+  if (!correction) return null;
+  if (correction.correction_type === 'confirm') return correction.origin === 'auto_pass2' ? null : CONFIRMED_TEXT;
+  if (correction.correction_type === 'false_positive') return NOT_AD_TEXT;
+  return null;
 }
 
 type ProposedAdSegment = AdSegment & { reviewer_proposed_start: number; reviewer_proposed_end: number };
@@ -892,7 +903,8 @@ function EpisodeDetail() {
         )}
         {(() => {
           const correction = getAdCorrection(segment.start, segment.end);
-          if (correction) {
+          // The result line below says it in words; the badge would repeat it.
+          if (correction && !correctionResultText(correction)) {
             return (
               <span className={`${badgeBase} ${
                 correction.correction_type === 'confirm'
@@ -907,10 +919,32 @@ function EpisodeDetail() {
           }
           return null;
         })()}
-        <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap">
+        <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap" title={formatConfidenceTitle(segment)}>
           {formatConfidence(segment)}
         </span>
       </div>
+      {(() => {
+        const correction = getAdCorrection(segment.start, segment.end);
+        const result = correctionResultText(correction);
+        if (!result) return null;
+        const recutPending = correction?.correction_type === 'false_positive';
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span data-testid={`ad-result-${index}`} className={recutPending ? 'text-warning' : 'text-success'}>{result}</span>
+            {recutPending && episode.hasOriginalAudio && (
+              <button
+                type="button"
+                onClick={() => handleReprocess('recut')}
+                disabled={reprocessBlocked}
+                title={reprocessBlockedReason ?? 'Recut the audio now so this segment comes back'}
+                className={`${rowActionBtn} ${btnSecondary} ${focusRing}`}
+              >
+                Recut now
+              </button>
+            )}
+          </div>
+        );
+      })()}
       {/* Detector's note, labelled "Match:" so reviewer-edited text is not read as a sponsor claim. */}
       {segment.reason && (
         <ExpandableText
@@ -1801,7 +1835,7 @@ function EpisodeDetail() {
                         </span>
                       )}
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground" title={formatConfidenceTitle(segment)}>
                       {formatConfidence(segment)}
                     </span>
                   </div>
@@ -2027,7 +2061,7 @@ function EpisodeDetail() {
                             </span>
                           )}
                         </div>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-muted-foreground" title={formatConfidenceTitle(segment)}>
                           {formatConfidence(segment)}
                         </span>
                       </div>
